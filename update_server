@@ -1,0 +1,106 @@
+#!/bin/sh
+##
+## Automated Minecraft Bedrock Server Updater for Linux
+## Created by Phosix, Feb 5, 2019
+##
+
+# Variables to be set as per end user preferences
+# The directory holding your Bedrock server files
+SERVER=${HOME}/server
+
+# The directory where you want the server software downloaded to
+DOWNLOAD=${HOME}/Downloads
+
+# The Minecraft Bedrock Server download page
+# If Minecraft.net ever goes away or changes, this will need to be changed to
+# the current distribution location.
+BASE_URL='https://minecraft.net/en-us/download/server/bedrock/'
+
+################################################################################
+################################################################################
+## BEGIN CODE - DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING              ##
+################################################################################
+################################################################################
+
+Alert () {
+  for process in "`ps auxwww | grep -v grep | grep 'nc -U' | awk '{print $2}'`" ; do
+    if [ "x${process}" != "x" ]; then
+      kill -HUP $process >& /dev/null
+    fi
+    echo "BORK! $process"
+  done
+  sleep 2
+  echo 'say The server is coming down for an update in one hour. Please get to a safe location.' | nc -U ${HOME}/server/12011 -w 1
+  sleep 1799s
+  echo 'say The server is coming down for an update in 30 minutes. Please get to a safe location.' | nc -U ${HOME}/server/12011 -w 1
+  sleep 899s
+  echo 'say The server is coming down for an update in 15 minutes. Please prepare.'| nc -U ${HOME}/server/12011 -w 1
+  sleep 299s
+  echo 'say The server is coming down for an update in 10 minutes! Please be ready!'| nc -U ${HOME}/server/12011 -w 1
+  sleep 299s
+  echo 'say The server is coming down for an update in five minutes!!!'| nc -U ${HOME}/server/12011 -w 1
+  sleep 239s
+  echo 'say The server is coming down in one minute!!!'| nc -U ${HOME}/server/12011 -w 1
+  sleep 59s
+  (echo 'say The server is coming down NOW!!!' && echo 'stop')| nc -U ${HOME}/server/12011 -w 1
+}
+
+URL=`curl -L ${BASE_URL} 2>/dev/null| grep bin-linux | sed -e 's/.*<a href=\"\(https:.*\/bin-linux\/.*\.zip\).*/\1/'`
+printf "%s\n" $URL
+
+# Verify if the DOWNLOAD and SERVER destinations exist. Create if it doesn't
+for check in "$DOWNLOAD" "$SERVER" ; do
+  if [ ! -d ${check} ] ; then
+    if [ -e ${check} ] ; then
+      # Error out if it does exist but isn't a directory
+      printf "\n%s is not a directory!\nPlease edit %s and change the line to point %s to the correct directory\n\n" "${check}" "$0" "${check}"
+      exit 1
+    fi
+    mkdir -p ${$check}
+  fi
+done
+
+# Create a backup copy of any existing server properties.
+#if [ ! -e ${SERVER}/server.properties ] ; then
+  cp ${SERVER}/server.properties ${SERVER}/server.properties.bak
+#fi
+
+# Create a backup copy of any existing whitelist.
+#if [ ! -e ${SERVER}/whitelist.json ] ; then
+  cp ${SERVER}/whitelist.json ${SERVER}/whitelist.json.bak
+#fi
+
+# Create a backup copy of any existing permissions.
+#if [ ! -e ${SERVER}/permissions.json ] ; then
+  cp ${SERVER}/permissions.json ${SERVER}/permissions.json.bak
+#fi
+
+# Check if a copy of the latest server exists in the DOWNLOAD directory
+if [ ! -e ${DOWNLOAD}/${URL##*/} ] ; then
+  #Give any players fair warning of the impending update, and stop the server
+  Alert 0;
+
+  # If it doesn't exist, retrieve the latest zip file and extract it to
+  # the SERVER directory.
+  curl ${URL} --output ${DOWNLOAD}/${URL##*/}
+  cd ${SERVER}
+  unzip -o ${DOWNLOAD}/${URL##*/} 2>&1 > /dev/null
+  echo "BORK\! Game files unzipped!"
+  # Copy the server properties backup into place
+  cp ${SERVER}/server.properties.bak ${SERVER}/server.properties
+  cp ${SERVER}/whitelist.json.bak ${SERVER}/whitelist.json
+  cp ${SERVER}/permissions.json.bak ${SERVER}/permissions.json
+  # Remove older copies of the server
+  find ${DOWNLOAD} -maxdepth 1 -type f -name bedrock-server\*.zip ! -newer ${DOWNLOAD}/${URL##*/} ! -name ${URL##*/} -delete
+
+  #Start up the server again.
+  ${HOME}/server/run &
+
+# If it does, do nothing. Either the software was downloaded manually and
+# setup should be finished manually or it has already been updated.
+else
+  printf "\nServer is up to date, nothing to do.\n\n"
+fi
+
+exit 0
+
