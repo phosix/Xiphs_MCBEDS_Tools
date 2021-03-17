@@ -13,7 +13,7 @@ If run as "mcbeds_start" an instance of the server located at ${SERVER} is start
 
 If run as "mcbeds_stop" the server located at ${SERVER} broadcasts a 1-hour, 30 minute, 15 minute, 10 minute, 5 minute, and 1 minute warning to players in-game, then the server is stopped.
 
-If run as "mcbeds_update" the script checks for any available updates to the software. If an update is found, it is downloaded, then a warning of the impending uipdate is broadcast to players at 1 hour, 30 minutes, 15 minutes, 10 minutes, 5 minutes, and one minute before the server is stopped and restarted.
+If run as "mcbeds_update" the script checks for any available updates to the software. If an update is found, it is downloaded, then a warning of the impending update is broadcast to players at 1 hour, 30 minutes, 15 minutes, 10 minutes, 5 minutes, and one minute before the server is stopped and restarted.
 
 The script checks three locations for runtime command files: /etc/mcbeds.rc, /usr/local/etc/mcbeds.rc, and ${HOME}/.mcbedsrc. This file should contain at a minimum an entry for SERVER that defines the path to the install directory of the Minecraft server. Full contents are:
 SERVER=/Path/to/server
