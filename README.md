@@ -26,15 +26,15 @@ The script, regardless of how it is called, accepts the following flags:
 
 -h    Print a usage summary and exit
 
--r    Start the server
--s    Stop the server
--u    Update the server
--D    The DOWNLOAD directory to use for downloading and tracking the server version
--L    Specify the name of the log file to write to
--M    A reason for shutdown to broadcast to players (if -N not specified)
--N    Override any server shutdown timing and stop the server NOW
--P    The UNIX socket to listen on in ${SERVER}/
--S    Specify the SERVER directory to manage on the command line, overriding what is in /etc/mcbeds.rc, /usr/local/etc/mbeds.rc and ${HOME}/.mcbedsrc
+-r    Start the server  
+-s    Stop the server  
+-u    Update the server  
+-D    The DOWNLOAD directory to use for downloading and tracking the server version  
+-L    Specify the name of the log file to write to  
+-M    A reason for shutdown to broadcast to players (if -N not specified)  
+-N    Override any server shutdown timing and stop the server NOW  
+-P    The UNIX socket to listen on in ${SERVER}/  
+-S    Specify the SERVER directory to manage on the command line, overriding what is in /etc/mcbeds.rc, /usr/local/etc/mbeds.rc and ${HOME}/.mcbedsrc  
 
 ## mcbeds.service
 A Systemd service file that will allow managing Minecraft from Systemd. Provides for start, stop (immediate), and restarting in the event of a server crash or update restart.
