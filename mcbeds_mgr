@@ -1,0 +1,301 @@
+#!/bin/bash
+################################################################################
+# E. Fuhr's Automated Minecraft Bedrock Server Updater for Linux
+# Derived from Phosix origional Update script. Depending on how the script is
+# called it will:
+# > Start a designated server in ${SERVER}
+# > Stop a designated server in ${SERVER}, with pre-defined warnings at set
+# intervals
+# > check for and apply updates to the server in ${SERVER}, with pre-defined
+# warning intervals and messages to any connected users.
+# Alternatively, if the -N flag is passed to the command, the server will be
+# uncerimoniously stopped.
+# If an update is being applied, the server will be restarted if it is not
+# automatically restarted by SystemD
+################################################################################
+# The variables previously defined here have been moved to .mcbedsrc, with
+# system-wide defaults specified in /etc/mcbeds.rc or /usr/local/etc/mcbeds.rc
+################################################################################
+# This script is designed to be run as one of multiple commands, or with
+# appropriate flags to define the behavior.
+# If run as "mcbeds_start", run the Start subroutine
+# If run as "mcbeds_stop", run the Stop subroutine NOW (assumes -N)
+# If run as "mcbeds_update", run the Update subroutine
+#
+# Flags used for this script:
+# -h	Print this help message
+#
+# -r	Run or start the server
+# -s	Stop or halt the server
+# -u	Update the server
+# -D	The DOWNLOAD directory to use for downloading and tracking the server version
+# -L	Specify the name of the log file to write to
+# -M	A reason for shutdown to broadcast to players (if -N not specified)
+# -N	Override any server shutdown timing and stop the server NOW
+# -P	The UNIX socket to listen on in ${SERVER}/
+# -S	Specify the SERVER directory to manage on the command line, overriding
+#	what is in /etc/mcbeds.rc, /usr/local/etc/mbeds.rc and ${HOME}/.mcbedsrc
+################################################################################
+################################################################################
+# Repeat the above information if the -h flag is present or otherwise bad
+# arguments are detected.
+Help () {
+  printf "%s [-h] [-r|s|u] [-N] [-D DOWNLOAD_DIRECTORY] [-L LOG_FILE] [-M \"Broadcast Message\"] [-P SOCKET] [-S SERVER_DIRECTORY]\n\n" $0
+  printf "The bahavior of this script is dependednt primarily on the flags passed, secondarily on the name called as. Using certain flags can forcibly override the behavior of the script, such as using \"-r\" flag with \"mcbeds_stop\" to force the script to run the server\n"
+  printf "Accepted flags are:\n -h	Print this usage help message\n\n -r	Run or start the server\n -s	Stop or halt the server\n -u	Update the server\n -D	Specity the directory to use for downloading and tracking the installed server version\n -L	Specify the log file to write server logs to\n -M	Reason for shutdown of server to broadcast to players (if -N not specified)\n -N	Override shutdown interval messages and stop the server NOW (only used with -s or -u)\n -P	Listen on the specified UNIX socket\n -S	Specify the SERVER directory to use\n\n"
+  printf "Flags -r, -s and -u are mutually exclusive, with only the last one in the command taking effect\n\n"
+  if [ $1 ] ; then printf " Invalid flag: %s\n\n" $1 ; fi
+  exit 0;
+}
+
+################################################################################
+# Parse all passed arguments
+ParseArgs () {
+  while [ "$#" -gt 0 ] ; do
+    if [ "x${DEFINE}" != "x" ] ; then
+      eval ${DEFINE}='$1'
+      DEFINE=''
+    elif  [ $(printf "%s" "$1" | wc -m) -gt 2 ] &&
+          [ "$(printf '%s' $1 | cut -c1)" = "-" ]; then
+      ParseArgs $(printf '%s' $1 | sed -e 's/^-//' -e 's/./-& /g')
+    else
+      case ${1} in
+        '-r')	ACTION="Start";;
+        '-s')	ACTION="Stop";;
+	'-u')	ACTION='Update';;
+	'-D')	DEFINE='DOWNLOAD';;
+	'-L')	DEFINE='LOG';;
+	'-M')	DEFINE='MESSAGE';;
+	'-N')	NoAlert=1;;
+	'-P')	DEFINE='PORT';;
+	'-S')	DEFINE='SERVER';;
+	'-h')	Help ;;
+	*)	Help "${1}" ;;
+      esac
+    fi
+    shift
+  done
+}
+
+################################################################################
+# Start the server up
+Start () {
+  ##############################################################################
+  # Check to see if a PID and matching process already exist.
+  # If there is a PID file, but the PID contained within is not found, it should
+  # be safe to assume the original process died without proper cleanup (such as
+  # an unexpected power event).
+  # If a matching PID is found and is assigned to a running bedrock_server
+  # instance, refuse to start. Otherwise, assume the previous instance died
+  #  without proper cleanup and the PID was reassigned to a different process.
+  if [ -e "${SERVER}/mcbeds.pid" ] ; then
+    if [ 'x'$(pgrep -lP $(cat ${SERVER}/mcbeds.pid) | grep bedrock_server | awk '{print $2}' ) = "xbedrock_server" ] ; then
+      printf "Error: It appears a bedrock server is already running from %s\n\nIf you think this is incorrect, please remove %s/mcbeds.pid and try again\n" ${SERVER} ${SERVER}
+      exit 1
+    fi
+  fi
+  
+  ##############################################################################
+  # As per the documentation from Mojang, the dedicated server is linked against
+  # a specific build of the Crypto library shared object (libCrypto.so). As a
+  # result, until Mojangs developers figure out how to statically link,
+  # the path to the location of the bundled libCrypto.so file must be specified.
+  # Note that replacing the system-wide libCrypto.so with the one bundled with
+  # Minecraft Bedrock Edition is not recommended, and doing so may cause issues
+  # with the hst system; it is best to simply keep the shared object an the
+  # runtime binary together.
+  ##############################################################################
+  LD_LIBRARY_PATH=${SERVER}
+
+  cd ${SERVER}
+  ##############################################################################
+  # The coproc command creates a forked instance of the named command with a
+  # special varable for bi-directional redirection of STDIN and STDOUT.
+  # Piping the output to the tee command allows us to capture all output to a
+  # specified log file while not hindering I/O with other processes.
+  coproc ( ${SERVER}/bedrock_server | tee -a ${LOG} )
+
+  ##############################################################################
+  # Record the PID file of the coprocess, for SystemD
+  echo ${COPROC_PID} > ${SERVER}/mcbeds.pid
+
+  ##############################################################################
+  # To cut down on unwanted chatter in the redirection variable, we throw out
+  # the initial startup message
+  while read -u ${COPROC[0]} line; do
+    case $line in
+      *Server\ started.)
+        break
+	;;
+      *) ;;
+    esac
+  done
+
+  ##############################################################################
+  # With the server started, the UNIX socket is created using netcat to handle
+  # interprocess communications, passing incoming commands to the server and
+  # returning the results to through the connection, finally closing the
+  # connection and waiting for subsequent requests.
+  # One caveat and possible security issue to be aware of: if events have
+  # occurred since the last command connection was made, such as a player
+  # connection, the events will be passed to the next connecting process.
+  while ( ps -Cp ${COPROC_PID}  > /dev/null ) ; do
+    nc -q1 -Ul ${SERVER}/${PORT:-12011} <&${COPROC[0]} >&${COPROC[1]}
+  done
+}
+
+################################################################################
+# Stop the running server by connecting to the UNIX socket and sending the
+# "stop" command to the running server, sleep for one second to give the server
+# time to cleanly exit, then remove the UNIX socket
+Stop () {
+  printf "say The server is coming down NOW!!!\nstop\n"| nc -U ${SERVER}/${PORT:-12011} -w 1
+  kill -HUP $(cat ${SERVER}/mcbeds.pid)
+  sleep 1
+  rm ${SERVER}/${PORT:-12011}
+  rm ${SERVER}/mcbeds.pid
+}
+
+################################################################################
+# Alerts sent out in intervals of 1 hour, 30 minutes, 15 minutes, 10 minutes,
+# 5 minutes, and 1 minute before server is shutdown
+Alert () {
+  for process in "`ps auxwww | grep -v grep | grep 'nc -U' | awk '{print $2}'`" ; do
+    if [ "x${process}" != "x" ]; then
+      kill -HUP $process >& /dev/null
+    fi
+  done
+  sleep 2
+  echo "say The server is coming down ${1} in one hour. Please get to a safe location." | nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 1799s
+  echo "say The server is coming down ${1} in 30 minutes. Please get to a safe location." | nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 899s
+  echo "say The server is coming down ${1} in 15 minutes. Please prepare."| nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 299s
+  echo "say The server is coming down ${1} in 10 minutes! Please be ready!"| nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 299s
+  echo "say The server is coming down ${1} in five minutes!!!"| nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 239s
+  echo "say The server is coming down in one minute!!!"| nc -U ${SERVER}/${PORT:-12011} -w 1
+  sleep 59s
+#  echo "say The server is coming down NOW!!!"| nc -U ${SERVER}/${PORT:-12011} -w 1
+#  sleep 1s
+}
+
+Update () {
+  if [ ! ${DOWNLOAD} ] ; then
+    DOWNLOAD="${HOME}/Downloads"
+  fi
+  URL=`curl -L ${BASE_URL} 2>/dev/null| grep bin-linux | sed -e 's/.*<a href=\"\(https:.*\/bin-linux\/.*\.zip\).*/\1/'`
+
+  # Verify if the DOWNLOAD and SERVER destinations exist. Create if it doesn't
+  if [ ! -e "${DOWNLOAD}" ]; then
+    mkdir -p "${DOWNLOAD}"
+  fi 
+  # Error out if DOWNLOAD isn't a directory
+  if [ ! -d "${DOWNLOAD}" ] ; then
+    printf "\n%s is not a valid directory!\nPlease edit %s/.mcbedsrc and change the DOWNLOAD entry to point to a valid directory\n\n" "${DOWNLOAD}" "${HOME}"
+    exit 1
+  fi
+
+  # Create a backup copy of any existing server properties.
+  #if [ ! -e ${SERVER}/server.properties ] ; then
+    cp ${SERVER}/server.properties ${SERVER}/server.properties.bak
+  #fi
+  
+  # Create a backup copy of any existing whitelist.
+  #if [ ! -e ${SERVER}/whitelist.json ] ; then
+    cp ${SERVER}/whitelist.json ${SERVER}/whitelist.json.bak
+  #fi
+  
+  # Create a backup copy of any existing permissions.
+  #if [ ! -e ${SERVER}/permissions.json ] ; then
+    cp ${SERVER}/permissions.json ${SERVER}/permissions.json.bak
+  #fi
+
+  # Check if a copy of the latest server exists in the DOWNLOAD directory
+  if [ ! -e ${DOWNLOAD}/${URL##*/} ] ; then
+
+    # If there is an update available, or there is no .zip file to check
+    # against, download the latest server zip file
+    curl ${URL} --output ${DOWNLOAD}/${URL##*/}
+    #Give any players fair warning of the impending update, and stop the server
+    if [ ! ${NoAlert} ] ; then
+      Alert ${MESSAGE:-"for an update"};
+    fi
+    # Extract the contents of the .zip file into the SERVER directory,
+    # overwriting the old server
+    cd ${SERVER}
+    unzip -o ${DOWNLOAD}/${URL##*/} 2>&1 > /dev/null
+    # Copy the server properties backup into place
+    cp ${SERVER}/server.properties.bak ${SERVER}/server.properties
+    cp ${SERVER}/whitelist.json.bak ${SERVER}/whitelist.json
+    cp ${SERVER}/permissions.json.bak ${SERVER}/permissions.json
+    # Remove older copies of the server
+    find ${DOWNLOAD} -maxdepth 1 -type f -name bedrock-server\*.zip ! -newer ${DOWNLOAD}/${URL##*/} ! -name ${URL##*/} -delete
+    # Stop the server
+    Stop
+
+    #If the server is managed by SystemD, the server should start back up
+    # automatically. If the server is NOT managed by SystemD, fork off a new
+    # Start process.
+    sleep 2
+    if ( ! pgrep bedrock_server ) ; then
+      Start &
+    fi
+
+  # If the latest .zip file exists in the DOWNLOADS directory, do nothing.
+  # Either the software was downloaded manually and setup should be finished
+  # manually or it has already been updated.
+  else
+    printf "\nServer is up to date, nothing to do.\n\n"
+  fi
+}
+
+################################################################################
+# START OF SCRIPT - First thing done
+################################################################################
+# The first stage is to read the runtime commands, in increasing orders of
+# priority. This allows for a system-wide default configuration file to be
+# overridden by individual configuration files without needing every variable
+# to be defined in the user-specific configuration file to be set.
+################################################################################
+
+if [ -e /etc/mcbeds.rc ] ; then
+  . /etc/mcbeds.rc
+fi
+if [ -e /usr/local/etc/mcbeds.rc ] ; then
+  . /usr/local/etc/mcbeds.rc
+fi
+if [ -e ${HOME}/.mcbedsrc ] ; then
+  . ${HOME}/.mcbedsrc
+fi
+
+################################################################################
+# Determine how the script was caled to set the default behavior
+
+case ${0##*/} in
+	'mcbeds_start')		ACTION='Start';;
+	'mcbeds_stop')		ACTION='Stop';;
+	'mcbeds_update')	ACTION='Update';;
+esac
+
+ParseArgs "$@"
+
+
+################################################################################
+# Run some sanity checks: if no server directory is defined after reading the
+# runtime command files and command line arguments, stop with an error.
+# Everything else can be given a default to fall back on, but the server
+if [ "x${SERVER}" = "x" ] ; then
+  printf "Error: No server configured!\n\nPlease specify SERVER=/path/to/your/server in %s\n" ${HOME}/.mcbedsrc
+  exit 1
+fi
+
+if [ ${ACTION} = "Stop" ] && [ ! ${NoAlert} ] ; then
+  Alert "${MESSAGE}"
+fi
+
+eval ${ACTION}
+exit 0
+

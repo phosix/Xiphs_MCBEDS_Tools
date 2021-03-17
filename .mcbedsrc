@@ -1,0 +1,25 @@
+################################################################################
+# The Minecraft Bedrock Edition Dedicated Server Runtime Commands file
+# Created by E. Fuhr
+#
+# This file is formatted as a Bourne shell runtime file. It is not intended to
+# be run independently, rather it is sourced by the various mcbeds scripts to
+# ensure a consistent operating environment between related services
+################################################################################
+# The following variables are used as follows:
+# SERVER	The location of the server, including the runtime binary,
+#		configuration files, world and resource directories; defaults
+#		to a directory "server" in the running user's home directory
+# PORT		The default UNIX socket to listen on
+# LOG		The location where log file should be written
+# DOWNLOAD	The location where the Minecraft Bedrock Edition Dedicated
+#		Server files should be saved to
+# BASE_URL	The Minecraft Bedrock Edition Dedicated Server download page
+#		If Minecraft.net ever goes away or changes, this will need to
+#		be changed to the current distribution location.
+################################################################################
+SERVER=${HOME}/server
+PORT=12011
+LOG=${SERVER}/mcbeds.log
+DOWNLOAD=${HOME}/Downloads
+BASE_URL='https://minecraft.net/en-us/download/server/bedrock/'
