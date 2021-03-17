@@ -1,0 +1,15 @@
+[Unit]
+Description=Minecraft Bedrock Edition Dedicated Server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=minecraft
+ExecStart=/usr/local/sbin/mcbeds_start
+ExecStop=/usr/local/sbin/mcbeds_stop -N
+
+[Install]
+WantedBy=multi-user.target

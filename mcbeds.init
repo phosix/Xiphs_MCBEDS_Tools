@@ -1,0 +1,48 @@
+#!/bin/sh
+
+mcbeds_pid=$(pgrep bedrock_server)
+
+case "$1" in
+	start)
+		if [ "${USER}" = "root" ] ; then
+			if [ "x${mcbeds_pid}" = "x" ]; then
+				exec /bin/su minecraft -c /usr/local/sbin/mcbeds_run &
+			else
+				printf "Minecraft Bedrock Dedicated Server is already running!\n"
+			fi
+		else
+			printf "Only root may start this service\n";
+		fi
+		;;
+	stop)
+		if [ "x${mcbeds_pid}" = "x" ]; then
+			printf "Minecraft Bedrock Dedicated Server is not running.\n"
+		else
+			if [ "${USER}" = "root" ] ; then
+				exec /bin/su minecraft -c /usr/local/sbin/mcbeds_stop -N
+			else
+				printf "Only root may stop this service.\n"
+			fi
+		fi
+		;;
+	restart)
+		if [ "${USER}" = "root" ] ; then
+			if [ "x${mcbeds_pid}" = "x" ]; then
+				printf "Minecraft Bedrock Dedicated Server not running. Starting up\n"
+			else
+				exec /bin/su minecraft -c /usr/local/sbin/mcbeds_stop -N
+				sleep 1
+			fi
+			exec /bin/su minecraft -c /usr/local/sbin/mcbeds_start
+		else
+			printf "Only root may restart this service.\n"
+		fi
+		;;
+	status)
+		if [ "x${mcbeds_pid}" = "x" ]; then
+			printf "Minecraft Bedrock Dedicated Server is not running\n"
+		else
+			printf "Minecraft Bedrock Dedicated Server is running as PID %s\n" ${mcbeds_pid}
+		fi
+		;;
+esac
