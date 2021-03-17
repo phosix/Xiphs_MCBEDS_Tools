@@ -15,12 +15,12 @@ If run as "mcbeds_stop" the server located at ${SERVER} broadcasts a 1-hour, 30 
 
 If run as "mcbeds_update" the script checks for any available updates to the software. If an update is found, it is downloaded, then a warning of the impending update is broadcast to players at 1 hour, 30 minutes, 15 minutes, 10 minutes, 5 minutes, and one minute before the server is stopped and restarted.
 
-The script checks three locations for runtime command files: /etc/mcbeds.rc, /usr/local/etc/mcbeds.rc, and ${HOME}/.mcbedsrc. This file should contain at a minimum an entry for SERVER that defines the path to the install directory of the Minecraft server. Full contents are:
-SERVER=/Path/to/server
-PORT=UNIX_Socket_File_to_use (defaults to 12011)
-LOG=/Path/to/where/logs/should/be/written (defaults to ${SERVER}/mcbeds.log)
-DOWNLOAD=/Path/to/where/server/updates/should/be/downloaded (defaults to ${HOME}/Downloads)
-BASE_URL='https://url.to/minecraft/bedrock/dedicated/server/repository' - there should never be any reason to change this unless Mojang switches up where they store the distribution, or you want to use a specific mirror.
+The script checks three locations for runtime command files: /etc/mcbeds.rc, /usr/local/etc/mcbeds.rc, and ${HOME}/.mcbedsrc. This file should contain at a minimum an entry for SERVER that defines the path to the install directory of the Minecraft server. Full contents are:  
+SERVER=/Path/to/server  
+PORT=UNIX_Socket_File_to_use (defaults to 12011)  
+LOG=/Path/to/where/logs/should/be/written (defaults to ${SERVER}/mcbeds.log)  
+DOWNLOAD=/Path/to/where/server/updates/should/be/downloaded (defaults to ${HOME}/Downloads)  
+BASE_URL='https://url.to/minecraft/bedrock/dedicated/server/repository' - there should never be any reason to change this unless Mojang switches up where they store the distribution, or you want to use a specific mirror.  
 
 The script, regardless of how it is called, accepts the following flags:
 
